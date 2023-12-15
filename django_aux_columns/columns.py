@@ -1,10 +1,11 @@
-import django_tables2 as tables
-from django_tables2 import A
-import random
+import random, json
 from pandas import isna, Series, DataFrame as DF
 from math import ceil
-import json
+
 from django.utils.html import mark_safe
+
+import django_tables2 as tables
+from django_tables2 import A
 from django_pandas.io import read_frame
 
 
@@ -50,7 +51,6 @@ class RoundNumberColumn(tables.Column):
         round_to: (int default=2) The number of decimals to round to
         prefix: (str, optional) This string is concatenated to the front of value
         suffix: (str, optional) This string is concatenated to the end of value
-        orderable: (bool default=True) Can django-table sort/order this col. Will be set to false if money, suffix or prefix provided
         **kwargs: arguments to be passed to django-tables2 Column class __init__ method
     """    
 
@@ -272,13 +272,13 @@ class CollapseDataFrameColumn(CollapseColumnBase):
         self.label = label
         self.limit = limit
         self.group_by = group_by
-        self.filter_kwargs = {} if filter_kwargs==None else filter_kwargs
-        self.filter_args = [] if filter_args==None else filter_args
-        self.annotate_kwargs = {} if annotate_kwargs==None else annotate_kwargs
-        self.values_kwargs = {} if values_kwargs==None else values_kwargs
-        self.values_args = [] if values_args==None else values_args
-        self.order_by_args = [] if order_by_args==None else order_by_args
-        self.use_read_frame = use_read_frame
+        self.filter_kwargs = filter_kwargs or {}
+        self.filter_args = filter_args or []
+        self.annotate_kwargs = annotate_kwargs or {}
+        self.values_kwargs = values_kwargs or {}
+        self.values_args = values_args or []
+        self.order_by_args = order_by_args or []
+        self.use_read_frame = use_read_frame 
         self.fieldnames = fieldnames
         self.column_names = column_names
         if to_html_kwargs==None:
@@ -301,8 +301,9 @@ class CollapseDataFrameColumn(CollapseColumnBase):
             kwargs['column_names'] = self.column_names
         return kwargs       
 
-    def get_queryset(self, value):
+    def get_df_data(self, value):
         ''' method applies user passed kwargs/args to qs methods '''
+        if isinstance(value, Queryset)
         qs = value.filter(
             *self.filter_args, **self.filter_kwargs
         )
@@ -337,7 +338,7 @@ class CollapseDataFrameColumn(CollapseColumnBase):
         return df.to_html(**self.to_html_kwargs)
 
     def render(self, value, record):
-        qs = self.get_queryset(value)
+        qs = self.get_def_data(value)
         if qs.count() == 0: 
             val = None
         else:
@@ -346,7 +347,7 @@ class CollapseDataFrameColumn(CollapseColumnBase):
 
     def value(self, value, record):
         ''' Return the value used during table export '''
-        qs = self.get_queryset(value)
+        qs = self.get_df_data(value)
         if qs.count() == 0:
             return None
         return self.get_df_final(qs).to_dict()
@@ -459,78 +460,7 @@ class CollapseNoniterableColumn(CollapseColumnBase):
     def value(self, value, record):
         return value
 
-class CollapseColumn(CollapseColumnBase):
-    ''' Column is meant for columns that have lots of data in each cell to make viewing cleaner'''
 
-    def __init__(
-        self, *args, hyperlink=False, href_attr=None,
-        iterable=False, str_attr=None, order_by=None, fkwargs=None, property_attr=None, dictionary=False,
-        **kwargs
-    ):  # Note on kwargs: lavel_accessor used to make dynamic labels, label_extra is a str that adds on to the returned value
-        super().__init__(*args, **kwargs)
-        self.hyperlink = hyperlink  # Attempts to linkify the elements of an iterable
-        # the attribute name to be used to pull the href value if None provided get_absolute_url will be called
-        self.href_attr = href_attr
-        self.iterable = iterable
-        self.str_attr = str_attr
-        self.order_by = order_by
-        self.fkwargs = fkwargs
-        self.property_attr = property_attr
-        self.dictionary = dictionary
-
-    def get_href(self, obj):
-        ''' Method derives the href value to be used in hyperlinking list items '''
-        if self.href_attr == None:
-            return obj.get_absolute_url()
-        else:
-            return getattr(obj, self.href_attr)
-
-    def render(self, value, record):
-        if self.property_attr:
-            value = getattr(record, self.property_attr)
-        if self.dictionary:
-            val = self.get_dictionary_val(value=value)        
-        elif self.iterable == False:
-            val = self.get_noniterable_val(value=value, record=record)
-        else: 
-            val = self.get_iterable_val(value)
-        return self.final_render(value=value, record=record, val=val)
-    
-    def get_iterable_val(self, value):
-        if self.order_by:
-            value = value.order_by(self.order_by)
-        if self.fkwargs:
-            value = value.filter(**self.fkwargs)
-        val = ''
-        style = self.get_style()
-        for obj in value:
-            obj_val = str(obj) if self.str_attr == None else getattr(obj, self.str_attr)
-            if self.hyperlink:
-                href = self.get_href(obj)
-                obj_val = f'<a href={href}>{obj_val}</a>'
-            val = val + f'<li style={style}>{obj_val}</li>'
-        return val
-
-    def get_noniterable_val(self, value, record):
-        if self.hyperlink:
-            href = self.get_href(record)
-            val = f'<a href={href}>{value}</a>'
-        else:
-            val = value
-        return f'<div style={self.get_style()}>{val}</div>'
-
-    def get_dictionary_val(self, value):
-        if isna(value):
-            value = {}        
-        if type(value) != dict:
-            value = json.loads(value)
-        df = DF(Series(value), columns=['value'])
-        df = df.reset_index().rename(columns={'index':'key'})
-        df_html = df.to_html(
-            classes = ['table-bordered', 'table-striped', 'table-sm'],
-            index=False, justify='left', header=False
-        )
-        return f'<div style={self.get_style()}>{df_html}</div>'
 
 
 def get_background(value, record, table, bound_column):
