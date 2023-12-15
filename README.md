@@ -1,2 +1,3 @@
 # django-aux-columns
-The intent of this package is to extend the functionality of django-tables2 by providing additional, hopefully useful, Column types
+
+Package provides additional specialty column types to supplement the fantastic [django-tables2](https://django-tables2.readthedocs.io/en/latest/) library
