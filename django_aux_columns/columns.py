@@ -7,6 +7,7 @@ from django.utils.html import mark_safe
 import django_tables2 as tables
 from django_tables2 import A
 from django_pandas.io import read_frame
+from django.db.models import QuerySet
 
 
 class FixedTextColumn(tables.Column):
@@ -27,7 +28,6 @@ class FixedTextColumn(tables.Column):
 
     def render(self, record, value):
         return self.text_value(record, value)
-
 
 class CheckFkColumn(tables.Column):
     ''' A column checks and displays the existence of a FK relationship '''
@@ -303,7 +303,8 @@ class CollapseDataFrameColumn(CollapseColumnBase):
 
     def get_df_data(self, value):
         ''' method applies user passed kwargs/args to qs methods '''
-        if isinstance(value, Queryset)
+        if not isinstance(value, QuerySet):
+            return value
         qs = value.filter(
             *self.filter_args, **self.filter_kwargs
         )
